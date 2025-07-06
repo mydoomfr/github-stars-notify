@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# GitHub
+.github
+
+# Documentation
+README.md
+PRD.md
+*.md
+
+# Build artifacts
+dist/
+build/
+target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Testing
+coverage.txt
+*.test
+*.out
+
+# Temporary files
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Data directory (if it contains test data)
+data/
+
+# Prometheus/Grafana configs (not needed in container)
+prometheus/
+grafana/
+
+# Dependencies (will be downloaded in build stage)
+vendor/ 
