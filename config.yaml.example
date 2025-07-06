@@ -1,0 +1,78 @@
+# GitHub Stars Notify Configuration
+# Copy this file to config.yaml and modify as needed
+
+# List of repositories to monitor (REQUIRED)
+repositories:
+  - owner: "facebook"
+    repo: "react"
+  - owner: "microsoft"
+    repo: "vscode"
+  - owner: "golang"
+    repo: "go"
+  # Add more repositories as needed
+
+# Application settings (optional - defaults available)
+# settings:
+#   # Check interval in minutes (default: 60)
+#   # Note: GitHub API allows 60 requests per hour for unauthenticated requests
+#   # With authentication, you get 5000 requests per hour
+#   check_interval_minutes: 60
+
+# GitHub API configuration (optional but recommended)
+# github:
+#   # GitHub personal access token (optional but recommended)
+#   # Create one at: https://github.com/settings/tokens
+#   # Required permissions: public_repo (for public repositories)
+#   # Without a token, you're limited to 60 requests per hour
+#   # With a token, you get 5000 requests per hour
+#   token: ""
+#   # HTTP timeout for GitHub API requests in seconds (default: 30)
+#   timeout_seconds: 30
+
+# HTTP server configuration (optional - has defaults)
+# server:
+#   # Port for metrics and health check endpoints (default: 9090)
+#   port: 9090
+#   # Host to bind to (default: "localhost")
+#   host: "localhost"
+#   # Read timeout in seconds (default: 30)
+#   read_timeout_seconds: 30
+#   # Write timeout in seconds (default: 30)
+#   write_timeout_seconds: 30
+
+# Storage configuration (optional - has defaults)
+# NOTE: This storage is used for caching GitHub API responses to detect new stars.
+# Data should be considered EPHEMERAL and can be safely deleted - the service will
+# rebuild its cache from GitHub API on next startup.
+# storage:
+#   # Storage type: currently only "file" is supported (default: "file")
+#   type: "file"
+#   # Path to store data files (default: "./data")
+#   path: "./data"
+
+# Logging configuration (optional - has defaults)
+# logging:
+#   # Log level: "debug", "info", "warn", "error" (default: "info")
+#   level: "info"
+#   # Log format: "json" or "text" (default: "text")
+#   format: "text"
+
+# Notification configuration (REQUIRED if you want notifications)
+notifications:
+  # Discord webhook notification
+  discord:
+    # Enable or disable Discord notifications
+    enabled: true
+    # Discord webhook URL - get this from your Discord server settings
+    # Server Settings > Integrations > Webhooks > New Webhook
+    webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+  
+  # Slack webhook notification
+  slack:
+    # Enable or disable Slack notifications
+    enabled: false
+    # Slack webhook URL - get this from your Slack app settings
+    # Go to https://api.slack.com/apps > Create New App > Incoming Webhooks
+    webhook_url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    # Optional: Specify channel (if not set, uses webhook default)
+    channel: "#github-stars" 
