@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github-stars-notify/internal/config"
 	"github-stars-notify/internal/service"
 )
 
@@ -18,14 +17,8 @@ func main() {
 	flag.StringVar(&configPath, "config", "config.yaml", "Path to configuration file")
 	flag.Parse()
 
-	// Load configuration
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
-
-	// Create the service
-	svc, err := service.New(cfg)
+	// Create the service with config path for hot reloading
+	svc, err := service.New(configPath)
 	if err != nil {
 		log.Fatalf("Failed to create service: %v", err)
 	}

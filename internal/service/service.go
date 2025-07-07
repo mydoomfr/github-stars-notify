@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github-stars-notify/internal/config"
@@ -19,30 +21,39 @@ import (
 
 // Service represents the main application service
 type Service struct {
-	config        *config.Config
-	github        *github.RetryableClient
-	storage       storage.Storage
-	notifiers     []notify.Notifier
-	metrics       *metrics.Metrics
-	metricsServer *http.Server
-	logger        *logger.Logger
-	cancel        context.CancelFunc
-	running       bool
-	startTime     time.Time
+	configReloader *config.Reloader
+	github         *github.RetryableClient
+	storage        storage.Storage
+	notifiers      []notify.Notifier
+	metrics        *metrics.Metrics
+	metricsServer  *http.Server
+	logger         *logger.Logger
+	cancel         context.CancelFunc
+	running        bool
+	startTime      time.Time
+	configPath     string
+	tickerUpdate   chan struct{} // Channel to signal ticker updates
 }
 
 // Dependencies holds all service dependencies
 type Dependencies struct {
-	Config    *config.Config
-	Storage   storage.Storage
-	Logger    *logger.Logger
-	Metrics   *metrics.Metrics
-	Notifiers []notify.Notifier
-	GitHub    *github.RetryableClient
+	ConfigPath string
+	Config     *config.Config
+	Storage    storage.Storage
+	Logger     *logger.Logger
+	Metrics    *metrics.Metrics
+	Notifiers  []notify.Notifier
+	GitHub     *github.RetryableClient
 }
 
 // New creates a new service instance with automatic dependency setup
-func New(cfg *config.Config) (*Service, error) {
+func New(configPath string) (*Service, error) {
+	// Load initial config
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
 	// Create logger from config
 	log := logger.NewLogger(logger.Config{
 		Level:   cfg.GetLogLevel(),
@@ -77,12 +88,13 @@ func New(cfg *config.Config) (*Service, error) {
 	}
 
 	deps := Dependencies{
-		Config:    cfg,
-		Storage:   stor,
-		Logger:    log,
-		Metrics:   met,
-		Notifiers: notifiers,
-		GitHub:    githubClient,
+		ConfigPath: configPath,
+		Config:     cfg,
+		Storage:    stor,
+		Logger:     log,
+		Metrics:    met,
+		Notifiers:  notifiers,
+		GitHub:     githubClient,
 	}
 
 	return NewWithDependencies(deps)
@@ -90,19 +102,98 @@ func New(cfg *config.Config) (*Service, error) {
 
 // NewWithDependencies creates a new service instance with provided dependencies
 func NewWithDependencies(deps Dependencies) (*Service, error) {
-	return &Service{
-		config:    deps.Config,
-		github:    deps.GitHub,
-		storage:   deps.Storage,
-		notifiers: deps.Notifiers,
-		metrics:   deps.Metrics,
-		logger:    deps.Logger.WithComponent("service"),
-		startTime: time.Now(),
-	}, nil
+	// Create config reloader
+	reloader, err := config.NewReloader(deps.ConfigPath, deps.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config reloader: %w", err)
+	}
+
+	service := &Service{
+		configReloader: reloader,
+		github:         deps.GitHub,
+		storage:        deps.Storage,
+		notifiers:      deps.Notifiers,
+		metrics:        deps.Metrics,
+		logger:         deps.Logger.WithComponent("service"),
+		startTime:      time.Now(),
+		configPath:     deps.ConfigPath,
+		tickerUpdate:   make(chan struct{}),
+	}
+
+	// Register config reload callback
+	reloader.AddCallback(service.handleConfigReload)
+
+	return service, nil
 }
 
 // NewForTest creates a new service instance for testing
 func NewForTest(cfg *config.Config) (*Service, error) {
+	// Create a temporary config file for testing
+	tmpDir, err := os.MkdirTemp("", "github-stars-notify-test")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "test-config.yaml")
+
+	// Create a minimal config YAML for testing
+	configYAML := fmt.Sprintf(`
+repositories:
+  - owner: "test"
+    repo: "test-repo"
+
+settings:
+  check_interval_minutes: %d
+
+github:
+  token: "%s"
+  timeout_seconds: %d
+
+server:
+  port: %d
+  host: "%s"
+  read_timeout_seconds: %d
+  write_timeout_seconds: %d
+
+storage:
+  type: "%s"
+  path: "%s"
+
+logging:
+  level: "%s"
+  format: "%s"
+
+notifications:
+  discord:
+    webhook_url: "%s"
+    enabled: %t
+  slack:
+    webhook_url: "%s"
+    channel: "%s"
+    enabled: %t
+`,
+		cfg.Settings.CheckIntervalMinutes,
+		cfg.GitHub.Token,
+		cfg.GitHub.Timeout,
+		cfg.Server.Port,
+		cfg.Server.Host,
+		cfg.Server.ReadTimeout,
+		cfg.Server.WriteTimeout,
+		cfg.Storage.Type,
+		cfg.Storage.Path,
+		cfg.Logging.Level,
+		cfg.Logging.Format,
+		cfg.Notifications.Discord.WebhookURL,
+		cfg.Notifications.Discord.Enabled,
+		cfg.Notifications.Slack.WebhookURL,
+		cfg.Notifications.Slack.Channel,
+		cfg.Notifications.Slack.Enabled,
+	)
+
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write test config: %w", err)
+	}
+
 	// Create test logger
 	log := logger.NewLogger(logger.Config{
 		Level:   cfg.GetLogLevel(),
@@ -134,12 +225,13 @@ func NewForTest(cfg *config.Config) (*Service, error) {
 	}
 
 	deps := Dependencies{
-		Config:    cfg,
-		Storage:   stor,
-		Logger:    log,
-		Metrics:   met,
-		Notifiers: notifiers,
-		GitHub:    githubClient,
+		ConfigPath: configPath,
+		Config:     cfg,
+		Storage:    stor,
+		Logger:     log,
+		Metrics:    met,
+		Notifiers:  notifiers,
+		GitHub:     githubClient,
 	}
 
 	return NewWithDependencies(deps)
@@ -152,6 +244,11 @@ func (s *Service) Start(ctx context.Context) error {
 	// Create cancellable context
 	serviceCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
+
+	// Start config reloader
+	if err := s.configReloader.Start(serviceCtx); err != nil {
+		return errors.NewServiceError("config-reloader", "failed to start config reloader", err)
+	}
 
 	// Record service start
 	s.metrics.RecordServiceStart()
@@ -188,75 +285,89 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 
 	s.running = true
+	config := s.configReloader.GetConfig()
 	s.logger.Info("service started successfully",
-		"repositories", len(s.config.Repositories),
-		"check_interval", s.config.GetCheckInterval(),
+		"repositories", len(config.Repositories),
+		"check_interval", config.GetCheckInterval(),
 		"notifiers", len(s.notifiers))
 
 	// Start the monitoring loop
-	ticker := time.NewTicker(s.config.GetCheckInterval())
+	currentInterval := config.GetCheckInterval()
+	ticker := time.NewTicker(currentInterval)
 	defer ticker.Stop()
 
 	// Start uptime updater
 	uptimeTicker := time.NewTicker(30 * time.Second)
 	defer uptimeTicker.Stop()
 
-	// Start rate limit checker (every 5 minutes)
-	rateLimitTicker := time.NewTicker(5 * time.Minute)
-	defer rateLimitTicker.Stop()
-
-	// Run initial check
-	s.runCheck(serviceCtx)
-
-	// Start periodic checks
 	for {
 		select {
+		case <-serviceCtx.Done():
+			return nil
 		case <-ticker.C:
 			s.runCheck(serviceCtx)
+		case <-s.tickerUpdate:
+			// Handle immediate ticker interval updates from config changes
+			newInterval := s.configReloader.GetConfig().GetCheckInterval()
+			s.logger.Debug("received ticker update signal",
+				"current_interval", currentInterval,
+				"new_interval", newInterval,
+				"needs_update", newInterval != currentInterval)
+			if newInterval != currentInterval {
+				oldInterval := currentInterval
+				ticker.Reset(newInterval)
+				currentInterval = newInterval
+				s.logger.Info("check interval updated immediately",
+					"old_interval", oldInterval,
+					"new_interval", newInterval)
+			}
 		case <-uptimeTicker.C:
 			s.metrics.UpdateServiceUptime(s.startTime)
-		case <-rateLimitTicker.C:
-			if err := s.checkRateLimits(serviceCtx); err != nil {
-				s.logger.Warn("rate limit check failed", "error", err)
-			}
-		case <-serviceCtx.Done():
-			s.logger.Info("service stopped")
-			return nil
 		}
 	}
 }
 
 // Stop stops the service
 func (s *Service) Stop() {
-	if s.running {
-		s.logger.Info("stopping service")
-
-		if s.cancel != nil {
-			s.cancel()
-		}
-		s.running = false
-
-		// Stop metrics server
-		if s.metricsServer != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := s.metricsServer.Shutdown(ctx); err != nil {
-				s.logger.Error("failed to shutdown metrics server", "error", err)
-			}
-		}
-
-		// Close storage
-		if err := s.storage.Close(); err != nil {
-			s.logger.Error("failed to close storage", "error", err)
-		}
-
-		s.logger.Info("service stopped successfully")
+	if !s.running {
+		return
 	}
+
+	s.logger.Info("stopping service")
+	s.running = false
+
+	// Cancel context to stop all background operations
+	if s.cancel != nil {
+		s.cancel()
+	}
+
+	// Close ticker update channel
+	close(s.tickerUpdate)
+
+	// Stop config reloader
+	s.configReloader.Stop()
+
+	// Stop metrics server
+	if s.metricsServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.metricsServer.Shutdown(ctx); err != nil {
+			s.logger.Error("failed to shutdown metrics server", "error", err)
+		}
+	}
+
+	// Close storage
+	if err := s.storage.Close(); err != nil {
+		s.logger.Error("failed to close storage", "error", err)
+	}
+
+	s.logger.Info("service stopped successfully")
 }
 
 // startMetricsServer starts the HTTP server for Prometheus metrics
 func (s *Service) startMetricsServer() error {
-	addr := s.config.GetServerAddress()
+	config := s.configReloader.GetConfig()
+	addr := config.GetServerAddress()
 	if addr == "" {
 		return fmt.Errorf("server address is empty")
 	}
@@ -275,8 +386,8 @@ func (s *Service) startMetricsServer() error {
 	s.metricsServer = &http.Server{
 		Addr:         addr,
 		Handler:      mux,
-		ReadTimeout:  time.Duration(s.config.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(s.config.Server.WriteTimeout) * time.Second,
+		ReadTimeout:  time.Duration(config.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(config.Server.WriteTimeout) * time.Second,
 	}
 
 	go func() {
@@ -293,7 +404,17 @@ func (s *Service) startMetricsServer() error {
 func (s *Service) runCheck(ctx context.Context) {
 	s.logger.Info("starting repository check cycle")
 
-	for _, repo := range s.config.Repositories {
+	config := s.configReloader.GetConfig()
+	s.logger.Info("current configuration for check cycle",
+		"repository_count", len(config.Repositories),
+		"check_interval", config.GetCheckInterval())
+
+	for i, repo := range config.Repositories {
+		s.logger.Info("processing repository",
+			"index", i,
+			"owner", repo.Owner,
+			"repo", repo.Repo)
+
 		if err := s.checkRepository(ctx, repo.Owner, repo.Repo); err != nil {
 			s.logger.Error("repository check failed",
 				"repo", repo.Owner+"/"+repo.Repo,
@@ -412,11 +533,12 @@ func (s *Service) checkRateLimits(ctx context.Context) error {
 
 // GetStatus returns the current service status
 func (s *Service) GetStatus() map[string]interface{} {
+	config := s.configReloader.GetConfig()
 	status := map[string]interface{}{
 		"running":        s.running,
-		"repositories":   len(s.config.Repositories),
+		"repositories":   len(config.Repositories),
 		"notifiers":      len(s.notifiers),
-		"check_interval": s.config.GetCheckInterval().String(),
+		"check_interval": config.GetCheckInterval().String(),
 		"uptime":         time.Since(s.startTime).String(),
 	}
 
@@ -433,4 +555,97 @@ func (s *Service) GetStatus() map[string]interface{} {
 	}
 
 	return status
+}
+
+// handleConfigReload handles config reload events
+func (s *Service) handleConfigReload(oldConfig, newConfig *config.Config) error {
+	s.logger.Info("handling configuration reload",
+		"old_check_interval", oldConfig.GetCheckInterval(),
+		"new_check_interval", newConfig.GetCheckInterval(),
+		"old_repo_count", len(oldConfig.Repositories),
+		"new_repo_count", len(newConfig.Repositories))
+
+	// Log repository changes
+	if len(oldConfig.Repositories) != len(newConfig.Repositories) {
+		s.logger.Info("repository count changed",
+			"old_count", len(oldConfig.Repositories),
+			"new_count", len(newConfig.Repositories))
+
+		for i, repo := range newConfig.Repositories {
+			s.logger.Info("new repository list entry",
+				"index", i,
+				"owner", repo.Owner,
+				"repo", repo.Repo)
+		}
+	}
+
+	// Recreate GitHub client if token or timeout changed
+	if oldConfig.GitHub.Token != newConfig.GitHub.Token ||
+		oldConfig.GetGitHubTimeout() != newConfig.GetGitHubTimeout() {
+		baseClient := github.NewClientWithConfig(github.Config{
+			Token:   newConfig.GitHub.Token,
+			Timeout: newConfig.GetGitHubTimeout(),
+		})
+		s.github = github.NewRetryableClient(baseClient, 3, time.Second*2)
+		s.logger.Info("recreated GitHub client")
+	}
+
+	// Recreate notifiers if notification config changed
+	if !equalNotifications(oldConfig.Notifications, newConfig.Notifications) {
+		notifiers, err := notify.CreateNotifiersWithLogger(newConfig, s.logger)
+		if err != nil {
+			s.logger.Warn("failed to recreate notifiers", "error", err)
+			s.notifiers = []notify.Notifier{} // Continue without notifiers
+		} else {
+			s.notifiers = notifiers
+			s.logger.Info("recreated notifiers")
+		}
+
+		// Test new notification connections
+		for _, notifier := range s.notifiers {
+			provider := notifier.GetProviderName()
+			if err := notifier.TestConnection(context.Background()); err != nil {
+				s.metrics.RecordNotificationError(provider, "connection_test_failed")
+				s.logger.Error("new notification connection test failed", "provider", provider, "error", err)
+			} else {
+				s.logger.Info("new notification connection test successful", "provider", provider)
+				s.metrics.RecordNotificationSent(provider, "connection_test_success")
+			}
+		}
+	}
+
+	// Update logger level if changed
+	if oldConfig.GetLogLevel() != newConfig.GetLogLevel() {
+		// Note: Logger level updating would need to be implemented in the logger package
+		s.logger.Info("log level changed",
+			"old_level", oldConfig.GetLogLevel(),
+			"new_level", newConfig.GetLogLevel())
+	}
+
+	// Signal ticker update if check interval changed
+	if oldConfig.GetCheckInterval() != newConfig.GetCheckInterval() {
+		s.logger.Info("check interval changed, signaling ticker update",
+			"old_interval", oldConfig.GetCheckInterval(),
+			"new_interval", newConfig.GetCheckInterval())
+
+		// Non-blocking send to ticker update channel
+		select {
+		case s.tickerUpdate <- struct{}{}:
+			s.logger.Debug("ticker update signal sent successfully")
+		default:
+			s.logger.Debug("ticker update channel full, signal skipped")
+		}
+	}
+
+	s.logger.Info("configuration reload completed successfully")
+	return nil
+}
+
+// equalNotifications compares notification configurations (helper function)
+func equalNotifications(a, b config.Notifications) bool {
+	return a.Discord.Enabled == b.Discord.Enabled &&
+		a.Discord.WebhookURL == b.Discord.WebhookURL &&
+		a.Slack.Enabled == b.Slack.Enabled &&
+		a.Slack.WebhookURL == b.Slack.WebhookURL &&
+		a.Slack.Channel == b.Slack.Channel
 }

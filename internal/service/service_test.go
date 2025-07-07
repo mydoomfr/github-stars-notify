@@ -17,7 +17,7 @@ func TestServiceBasic(t *testing.T) {
 			CheckIntervalMinutes: 10,
 		},
 		GitHub: config.GitHubConfig{
-			Token:   "",
+			Token:   "test-token",
 			Timeout: 30,
 		},
 		Server: config.ServerConfig{
@@ -53,8 +53,9 @@ func TestServiceBasic(t *testing.T) {
 	}
 
 	// Test service creation
-	if service.config != cfg {
-		t.Error("Config not set correctly")
+	loadedCfg := service.configReloader.GetConfig()
+	if loadedCfg == nil {
+		t.Error("Config not loaded correctly")
 	}
 	if service.github == nil {
 		t.Error("GitHub client not initialized")
