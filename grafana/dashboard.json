@@ -10,13 +10,24 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "github_stars_total",
+          "expr": "max by (owner, repo) (github_stars_total)",
           "legendFormat": "{{owner}}/{{repo}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": true,
+            "insertNulls": false,
+            "showPoints": "always",
+            "pointSize": 5
+          },
           "mappings": [],
           "thresholds": {
             "steps": [
@@ -61,13 +72,24 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "github_stars_service_uptime_seconds",
+          "expr": "max(github_stars_service_uptime_seconds)",
           "legendFormat": "Uptime",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": true,
+            "insertNulls": false,
+            "showPoints": "always",
+            "pointSize": 5
+          },
           "mappings": [],
           "thresholds": {
             "steps": [
@@ -109,7 +131,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "github_stars_total",
+          "expr": "max by (owner, repo) (github_stars_total)",
           "legendFormat": "{{owner}}/{{repo}}",
           "refId": "A"
         }
@@ -121,11 +143,11 @@
             "lineInterpolation": "linear",
             "barAlignment": 0,
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "gradientMode": "none",
-            "spanNulls": false,
+            "spanNulls": true,
             "insertNulls": false,
-            "showPoints": "auto",
+            "showPoints": "always",
             "pointSize": 5,
             "stacking": {
               "mode": "none",
@@ -164,7 +186,7 @@
       },
       "options": {
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "legend": {
@@ -181,11 +203,11 @@
     },
     {
       "id": 4,
-      "title": "New Stars Count",
+      "title": "New Stars Count (Hourly)",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "increase(github_stars_new_total[15m])",
+          "expr": "sum by (owner, repo) (increase(github_stars_new_total[1h]))",
           "legendFormat": "{{owner}}/{{repo}}",
           "refId": "A"
         }
@@ -197,12 +219,12 @@
             "lineInterpolation": "linear",
             "barAlignment": 0,
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 20,
             "gradientMode": "none",
-            "spanNulls": false,
+            "spanNulls": true,
             "insertNulls": false,
-            "showPoints": "auto",
-            "pointSize": 5,
+            "showPoints": "always",
+            "pointSize": 6,
             "stacking": {
               "mode": "none",
               "group": "A"
@@ -235,13 +257,14 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
       "options": {
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "legend": {
@@ -258,11 +281,11 @@
     },
     {
       "id": 5,
-      "title": "Check Duration",
+      "title": "Check Duration (Average)",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "github_stars_check_duration_seconds",
+          "expr": "sum by (owner, repo) (rate(github_stars_check_duration_seconds_sum[1h])) / sum by (owner, repo) (rate(github_stars_check_duration_seconds_count[1h]))",
           "legendFormat": "{{owner}}/{{repo}}",
           "refId": "A"
         }
@@ -274,11 +297,11 @@
             "lineInterpolation": "linear",
             "barAlignment": 0,
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "gradientMode": "none",
-            "spanNulls": false,
+            "spanNulls": true,
             "insertNulls": false,
-            "showPoints": "auto",
+            "showPoints": "always",
             "pointSize": 5,
             "stacking": {
               "mode": "none",
@@ -312,13 +335,14 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "s",
+          "min": 0
         },
         "overrides": []
       },
       "options": {
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "legend": {
@@ -339,12 +363,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "github_api_rate_limit_limit{resource=\"core\"} - github_api_rate_limit_remaining{resource=\"core\"}",
+          "expr": "max(github_api_rate_limit_limit{resource=\"core\"}) - max(github_api_rate_limit_remaining{resource=\"core\"})",
           "legendFormat": "Used",
           "refId": "A"
         },
         {
-          "expr": "github_api_rate_limit_limit{resource=\"core\"}",
+          "expr": "max(github_api_rate_limit_limit{resource=\"core\"})",
           "legendFormat": "Limit (core)",
           "refId": "B"
         }
@@ -360,7 +384,7 @@
             "gradientMode": "none",
             "spanNulls": true,
             "insertNulls": false,
-            "showPoints": "auto",
+            "showPoints": "always",
             "pointSize": 5,
             "stacking": {
               "mode": "none",
@@ -390,19 +414,20 @@
               },
               {
                 "color": "yellow",
-                "value": 45
+                "value": 4000
               },
               {
                 "color": "orange", 
-                "value": 55
+                "value": 4500
               },
               {
                 "color": "red",
-                "value": 4500
+                "value": 4800
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": [
           {
@@ -424,7 +449,7 @@
               },
               {
                 "id": "custom.lineWidth",
-                "value": 2
+                "value": 1
               },
               {
                 "id": "custom.spanNulls",
@@ -466,7 +491,7 @@
       },
       "options": {
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "legend": {
@@ -487,7 +512,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "rate(github_stars_checks_total{status=\"success\"}[5m]) / rate(github_stars_checks_total[5m]) * 100",
+          "expr": "sum(rate(github_stars_checks_total{status=\"success\"}[1h])) / sum(rate(github_stars_checks_total[1h])) * 100",
           "legendFormat": "Success Rate",
           "refId": "A"
         }
@@ -539,13 +564,18 @@
     },
     {
       "id": 8,
-      "title": "Discord Notifications - Success Only",
+      "title": "Notifications Sent (Hourly)",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "increase(discord_notifications_total{status=\"success\"}[2m])",
-          "legendFormat": "Successful Notifications",
+          "expr": "sum by (provider) (increase(notifications_sent_total{status=\"success\"}[1h]))",
+          "legendFormat": "{{provider}} - Success",
           "refId": "A"
+        },
+        {
+          "expr": "sum by (provider) (increase(notifications_sent_total{status=\"failed\"}[1h]))",
+          "legendFormat": "{{provider}} - Failed",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -555,12 +585,12 @@
             "lineInterpolation": "linear",
             "barAlignment": 0,
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 20,
             "gradientMode": "none",
-            "spanNulls": false,
-            "insertNulls": true,
-            "showPoints": "auto",
-            "pointSize": 5,
+            "spanNulls": true,
+            "insertNulls": false,
+            "showPoints": "always",
+            "pointSize": 6,
             "stacking": {
               "mode": "none",
               "group": "A"
@@ -593,13 +623,45 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Failed.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Success.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "legend": {
@@ -616,17 +678,17 @@
     },
     {
       "id": 9,
-      "title": "Error Count",
+      "title": "Error Count (Hourly)",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "increase(github_stars_check_errors_total[15m])",
+          "expr": "sum by (error_type) (increase(github_stars_check_errors_total[1h]))",
           "legendFormat": "Check Error: {{error_type}}",
           "refId": "A"
         },
         {
-          "expr": "increase(discord_errors_total[15m])",
-          "legendFormat": "Discord Error: {{error_type}}",
+          "expr": "sum by (provider, error_type) (increase(notification_errors_total[1h]))",
+          "legendFormat": "{{provider}} Error: {{error_type}}",
           "refId": "B"
         }
       ],
@@ -637,12 +699,12 @@
             "lineInterpolation": "linear",
             "barAlignment": 0,
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 20,
             "gradientMode": "none",
-            "spanNulls": false,
+            "spanNulls": true,
             "insertNulls": false,
-            "showPoints": "auto",
-            "pointSize": 5,
+            "showPoints": "always",
+            "pointSize": 6,
             "stacking": {
               "mode": "none",
               "group": "A"
@@ -675,13 +737,14 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
       "options": {
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "legend": {
@@ -695,14 +758,88 @@
         "x": 12,
         "y": 32
       }
+    },
+    {
+      "id": 10,
+      "title": "Last Check Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "max by (owner, repo) (github_stars_last_check_timestamp) * 1000",
+          "legendFormat": "{{owner}}/{{repo}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "spanNulls": true,
+            "insertNulls": false,
+            "showPoints": "always",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "dateTimeAsIso"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      }
     }
   ],
   "time": {
-    "from": "now-1h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
-  "uid": "github-stars-notify",
   "version": 1,
-  "weekStart": ""
+  "schemaVersion": 27,
+  "style": "dark",
+  "refresh": "5m"
 } 
