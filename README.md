@@ -7,6 +7,7 @@
 ![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/Apache-2.0-green?style=for-the-badge)
+![Latest Release](https://img.shields.io/github/v/release/mydoomfr/github-stars-notify?style=for-the-badge&logo=github&logoColor=white)
 
 </div>
 
@@ -22,7 +23,28 @@ A **lightweight Go service** that watches your GitHub repositories and sends bea
 - 🔔 **Discord & Slack notifications** with rich embeds (more coming soon)
 - 📊 **Prometheus metrics** built-in with Grafana dashboard
 - ⚡ **GitHub Rate limit aware** and optimized
+- 🔄 **Hot reload configuration** - update settings without restart
 - 🐳 **Container image ready** with multi-platform support
+
+## 📸 Screenshots
+
+<details>
+<summary>📊 <strong>Grafana Dashboard</strong></summary>
+
+Monitor your star notifications with beautiful metrics and graphs:
+
+![Grafana Dashboard](assets/grafana.jpg)
+
+</details>
+
+<details>
+<summary>🔔 <strong>Discord Notifications</strong></summary>
+
+Get instant notifications when your repositories receive new stars:
+
+![Discord Notifications](assets/discord.jpg)
+
+</details>
 
 ## 🐳 Docker
 
