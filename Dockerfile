@@ -20,7 +20,7 @@ ARG TARGETOS
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -ldflags="-w -s" -o github-stars-notify .
 
 # Final stage - minimal container with CA certificates
-FROM alpine:3.21.1
+FROM alpine:3.22.0
 
 # Install CA certificates
 RUN apk --no-cache add ca-certificates tzdata
